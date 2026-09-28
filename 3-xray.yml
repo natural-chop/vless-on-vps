@@ -1,0 +1,115 @@
+- name: Deploy Xray VLESS-REALITY Bypass Server
+  hosts: vps
+  gather_facts: true
+  vars_files:
+    - vars.yml
+  vars:
+    ansible_user: "{{ new_user }}"
+    ansible_password: "{{ new_user_password }}"
+    ansible_become: true
+    ansible_become_password: "{{ new_user_password }}"
+
+  tasks:
+    - name: Install UFW firewall
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+
+    - name: Download official Xray-core installation script
+      ansible.builtin.get_url:
+        url: https://github.com/XTLS/Xray-install/raw/main/install-release.sh
+        dest: /tmp/install-xray.sh
+        mode: '0755'
+
+    - name: Run Xray installation script
+      ansible.builtin.command:
+        cmd: bash /tmp/install-xray.sh
+        creates: /usr/local/bin/xray
+
+    - name: Deploy Xray server configuration
+      ansible.builtin.copy:
+        dest: /usr/local/etc/xray/config.json
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          {
+            "log": {
+              "loglevel": "warning"
+            },
+            "inbounds": [
+              {
+                "port": {{ xray_port }},
+                "protocol": "vless",
+                "settings": {
+                  "clients": [
+                    {% for client in xray_clients %}
+                    {
+                      "id": "{{ client.uuid }}",
+                      "flow": "xtls-rprx-vision",
+                      "email": "{{ client.name }}"
+                    }{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                  ],
+                  "decryption": "none"
+                },
+                "streamSettings": {
+                  "network": "tcp",
+                  "security": "reality",
+                  "realitySettings": {
+                    "show": false,
+                    "dest": "{{ xray_dest }}",
+                    "xver": 0,
+                    "serverNames": [
+                      "{{ xray_sni }}"
+                    ],
+                    "privateKey": "{{ xray_private_key }}",
+                    "shortIds": [
+                      "{{ xray_short_id }}"
+                    ]
+                  }
+                }
+              }
+            ],
+            "outbounds": [
+              {
+                "protocol": "freedom"
+              }
+            ]
+          }
+      notify: Restart Xray Service
+
+    - name: Output client connection strings
+      ansible.builtin.debug:
+        msg: "vless://{{ item.uuid }}@{{ ansible_host }}:{{ xray_port }}?type=tcp&security=reality&pbk={{ xray_public_key }}&fp=chrome&sni={{ xray_sni }}&sid={{ xray_short_id }}&flow=xtls-rprx-vision#{{ item.name }}"
+      loop: "{{ xray_clients }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Allow SSH port through UFW firewall
+      ansible.builtin.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Allow Xray port through UFW firewall
+      ansible.builtin.ufw:
+        rule: allow
+        port: "{{ xray_port | string }}"
+        proto: tcp
+
+    - name: Enable UFW firewall
+      ansible.builtin.ufw:
+        state: enabled
+
+    - name: Ensure Xray service is enabled and started
+      ansible.builtin.systemd:
+        name: xray
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart Xray Service
+      ansible.builtin.service:
+        name: xray
+        state: restarted

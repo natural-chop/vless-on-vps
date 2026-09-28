@@ -1,0 +1,15 @@
+ansible_host: "1.2.3.4"
+root_password: "old-pass"
+new_user: "new-login"
+new_user_password: "new-pass"
+xray_port: 443
+xray_sni: "dl.google.com"
+xray_dest: "dl.google.com:443"
+xray_private_key: "private-key"
+xray_public_key: "public-key"
+xray_short_id: "1a2b3c4d"
+xray_clients:
+  - name: "client1"
+    uuid: "uuid1"
+  - name: "client2"
+    uuid: "uuid2"

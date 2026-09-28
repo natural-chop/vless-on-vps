@@ -1,0 +1,73 @@
+---
+- name: Initial System Preparation (as root)
+  hosts: vps
+  gather_facts: true
+  vars_files:
+    - vars.yml
+  vars:
+    ansible_user: "root"
+    ansible_password: "{{ root_password }}"
+
+  tasks:
+    - name: Update apt package index and upgrade all packages
+      ansible.builtin.apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Ensure journalctl drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/journald.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure journalctl log size limits
+      ansible.builtin.copy:
+        dest: /etc/systemd/journald.conf.d/00-journal-limits.conf
+        content: |
+          [Journal]
+          SystemMaxUse=100M
+          SystemMaxKeepFiles=5
+          MaxRetentionSec=7day
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Journald Service
+
+    - name: Immediately vacuum journal logs exceeding limit
+      ansible.builtin.command: journalctl --vacuum-size=100M
+      changed_when: false
+
+    - name: Create non-root user with sudo access
+      ansible.builtin.user:
+        name: "{{ new_user }}"
+        password: "{{ new_user_password | password_hash('sha512') }}"
+        shell: /bin/bash
+        groups: sudo
+        append: yes
+        state: present
+
+    - name: Configure SSH to disable root login and enforce password authentication
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-custom-auth.conf
+        content: |
+          PermitRootLogin no
+          PasswordAuthentication yes
+          KbdInteractiveAuthentication yes
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart SSH Service
+
+    - name: Check if system reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_flag
+
+    - name: Reboot server if required by system updates
+      ansible.builtin.reboot:
+        msg: "Rebooting server after initial system upgrades"
+        reboot_timeout: 60
+      when: reboot_flag.stat.exists
