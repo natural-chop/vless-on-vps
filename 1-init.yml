@@ -49,18 +49,6 @@
         append: yes
         state: present
 
-    - name: Configure SSH to disable root login and enforce password authentication
-      ansible.builtin.copy:
-        dest: /etc/ssh/sshd_config.d/99-custom-auth.conf
-        content: |
-          PermitRootLogin no
-          PasswordAuthentication yes
-          KbdInteractiveAuthentication yes
-        owner: root
-        group: root
-        mode: '0644'
-      notify: Restart SSH Service
-
     - name: Check if system reboot is required
       ansible.builtin.stat:
         path: /var/run/reboot-required
