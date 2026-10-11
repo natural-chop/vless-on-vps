@@ -43,7 +43,7 @@
                 "protocol": "vless",
                 "settings": {
                   "clients": [
-                    {% for client in xray_clients %}
+                    {% for client in clients_list %}
                     {
                       "id": "{{ client.uuid }}",
                       "flow": "xtls-rprx-vision",
@@ -58,10 +58,10 @@
                   "security": "reality",
                   "realitySettings": {
                     "show": false,
-                    "dest": "{{ xray_dest }}",
+                    "dest": "{{ spoof_sni }}:443",
                     "xver": 0,
                     "serverNames": [
-                      "{{ xray_sni }}"
+                      "{{ spoof_sni }}"
                     ],
                     "privateKey": "{{ xray_private_key }}",
                     "shortIds": [
@@ -79,10 +79,19 @@
           }
       notify: Restart Xray Service
 
+    - name: Derive Xray public key from private key on the server
+      ansible.builtin.shell: |
+        set -o pipefail
+        xray x25519 -i "{{ xray_private_key }}" | grep "Public key:" | awk '{print $3}'
+      args:
+        executable: /bin/bash
+      register: xray_derived_pubkey
+      changed_when: false
+
     - name: Output client connection strings
       ansible.builtin.debug:
-        msg: "vless://{{ item.uuid }}@{{ ansible_host }}:{{ xray_port }}?type=tcp&security=reality&pbk={{ xray_public_key }}&fp=chrome&sni={{ xray_sni }}&sid={{ xray_short_id }}&flow=xtls-rprx-vision#{{ item.name }}"
-      loop: "{{ xray_clients }}"
+        msg: "vless://{{ item.uuid }}@{{ ansible_host }}:{{ xray_port }}?type=tcp&security=reality&pbk={{ xray_derived_pubkey.stdout | trim }}&fp=chrome&sni={{ spoof_sni }}&sid={{ xray_short_id }}&flow=xtls-rprx-vision#{{ item.name }}"
+      loop: "{{ clients_list }}"
       loop_control:
         label: "{{ item.name }}"
 

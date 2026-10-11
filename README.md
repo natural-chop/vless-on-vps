@@ -28,20 +28,34 @@ root_password: "old-pass"           # Временный пароль root, вы
 new_user: "new-login"              # Имя создаваемого sudo-пользователя
 new_user_password: "new-pass"       # Пароль для нового sudo-пользователя
 
-# Параметры Xray (VLESS-REALITY)
+# Параметры Xray (VLESS)
 xray_port: 443                      # Входящий порт Xray (рекомендуется 443)
-xray_sni: "dl.google.com"           # Домен для маскировки (SNI)
-xray_dest: "dl.google.com:443"      # Целевой адрес маскируемого сайта (DEST)
+spoof_sni: "dl.google.com"           # Домен для маскировки (SNI)
 xray_private_key: "private-key"     # Приватный ключ REALITY
-xray_public_key: "public-key"       # Публичный ключ REALITY (для клиентов)
 xray_short_id: "1a2b3c4d"          # Short ID REALITY (hex-строка)
 
-# Список клиентов Xray
-xray_clients:
+# Параметры AWG
+awg_subnet: "10.8.0.0/24" # Подсеть для Wireguard
+awg_port: 51820 # Порт для подключения
+awg_jc: 4 # Константа
+awg_jmin: 40 # Константа
+awg_jmax: 70 # Константа
+awg_s1: 15 # Константа
+awg_s2: 110 # Константа
+awg_h1: 10123456 # Константа
+awg_h2: 20123456 # Константа
+awg_h3: 30123456 # Константа
+awg_h4: 40123456 # Константа
+awg_server_private_key: "oAi/M03p...YOUR_SERVER_KEY..." # Приватный ключ Wireguard
+
+# Список клиентов
+clients_list:
   - name: "client1"
     uuid: "uuid1"                  # UUID первого клиента
+    awg_private_key: "0C81mP9L...YOUR_CLIENT_KEY..." # AWG ключ первого клиента
   - name: "client2"
     uuid: "uuid2"                  # UUID второго клиента
+    awg_private_key: "0C81mP9L...YOUR_CLIENT_KEY..." # AWG ключ второго клиента
 
 ```
 
@@ -53,7 +67,7 @@ xray_clients:
 
 ---
 
-### 1. Пара ключей REALITY (`xray_private_key` и `xray_public_key`)
+### 1. Ключ VLESS (`xray_private_key`)
 
 Пара ключей задействует эллиптическую кривую Curve25519 (`x25519`).
 
@@ -75,7 +89,6 @@ xray x25519
 
 ```text
 Private key: eFA1... (вставьте в vars.yml как xray_private_key)
-Public key:  3kB9... (вставьте в vars.yml как xray_public_key)
 
 ```
 
@@ -107,7 +120,7 @@ head -c 8 /dev/urandom | xxd -p
 
 ### 3. Генерация UUID для клиентов (`uuid`)
 
-Каждому клиенту из списка `xray_clients` требуется уникальный идентификатор в формате UUID v4.
+Каждому клиенту из списка `clients_list` требуется уникальный идентификатор в формате UUID v4.
 
 #### Через консоль Linux:
 

@@ -1,0 +1,177 @@
+- name: Deploy AmneziaWG Obfuscated VPN Server
+  hosts: vps
+  gather_facts: true
+  vars_files:
+    - vars.yml
+  vars:
+    ansible_user: "{{ new_user }}"
+    ansible_password: "{{ new_user_password }}"
+    ansible_become: true
+    ansible_become_password: "{{ new_user_password }}"
+    awg_server_ip: "{{ awg_subnet | ansible.utils.nthhost(1) }}"
+
+  tasks:
+    - name: Install UFW and dependencies
+      ansible.builtin.apt:
+        name:
+          - ufw
+          - software-properties-common
+          - iptables
+        state: present
+        update_cache: yes
+
+    - name: Add AmneziaWG PPA repository
+      ansible.builtin.apt_repository:
+        repo: ppa:amnezia/ppa
+        state: present
+
+    - name: Install AmneziaWG tools and kernel module (DKMS)
+      ansible.builtin.apt:
+        name:
+          - amneziawg
+          - amneziawg-tools
+        state: present
+        update_cache: yes
+
+    - name: Enable IPv4 packet forwarding in sysctl
+      ansible-posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        sysctl_set: true
+        state: present
+        reload: true
+
+    - name: Get primary network interface name
+      ansible.builtin.set_fact:
+        wan_iface: "{{ ansible_default_ipv4.interface }}"
+
+    - name: Ensure AWG configuration directory exists
+      ansible.builtin.file:
+        path: /etc/amnezia/amneziawg
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Derive server public key from static private key
+      ansible.builtin.command:
+        cmd: "awg pubkey"
+        stdin: "{{ awg_server_private_key }}"
+      register: awg_server_pubkey_cmd
+      changed_when: false
+
+    - name: Derive client public keys from static private keys
+      ansible.builtin.command:
+        cmd: "awg pubkey"
+        stdin: "{{ item.awg_private_key }}"
+      register: awg_client_pubkeys_cmd
+      loop: "{{ clients_list }}"
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: false
+
+    - name: Set derived public key facts
+      ansible.builtin.set_fact:
+        awg_server_public_key: "{{ awg_server_pubkey_cmd.stdout | trim }}"
+        awg_client_public_keys: >-
+          {%- set pubkeys = {} -%}
+          {%- for res in awg_client_pubkeys_cmd.results -%}
+            {%- set _ = pubkeys.update({res.item.name: res.stdout | trim}) -%}
+          {%- endfor -%}
+          {{ pubkeys }}
+
+    - name: Deploy AmneziaWG server configuration (awg0.conf)
+      ansible.builtin.copy:
+        dest: /etc/amnezia/amneziawg/awg0.conf
+        owner: root
+        group: root
+        mode: '0600'
+        content: |
+          [Interface]
+          Address = {{ awg_server_ip }}/24
+          ListenPort = {{ awg_port }}
+          PrivateKey = {{ awg_server_private_key }}
+
+          # Obfuscation Parameters
+          Jc = {{ awg_jc }}
+          Jmin = {{ awg_jmin }}
+          Jmax = {{ awg_jmax }}
+          S1 = {{ awg_s1 }}
+          S2 = {{ awg_s2 }}
+          H1 = {{ awg_h1 }}
+          H2 = {{ awg_h2 }}
+          H3 = {{ awg_h3 }}
+          H4 = {{ awg_h4 }}
+
+          # IP Masquerading Rules
+          PostUp = iptables -A FORWARD -i awg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o {{ wan_iface }} -j MASQUERADE
+          PostDown = iptables -D FORWARD -i awg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o {{ wan_iface }} -j MASQUERADE
+
+          {% for client in clients_list %}
+          {% set client_ip = awg_subnet | ansible.utils.nthhost(loop.index + 1) %}
+          [Peer]
+          # Name: {{ client.name }}
+          PublicKey = {{ awg_client_public_keys[client.name] }}
+          AllowedIPs = {{ client_ip }}/32
+          {% endfor %}
+      notify: Restart AmneziaWG Service
+
+    - name: Output AmneziaWG client connection profiles
+      ansible.builtin.debug:
+        msg: |
+          ==============================
+          Client Profile: {{ item.name }}
+          ==============================
+          [Interface]
+          PrivateKey = {{ item.awg_private_key }}
+          Address = {{ client_ip }}/32
+          DNS = 9.9.9.10, 149.112.112.10
+          Jc = {{ awg_jc }}
+          Jmin = {{ awg_jmin }}
+          Jmax = {{ awg_jmax }}
+          S1 = {{ awg_s1 }}
+          S2 = {{ awg_s2 }}
+          H1 = {{ awg_h1 }}
+          H2 = {{ awg_h2 }}
+          H3 = {{ awg_h3 }}
+          H4 = {{ awg_h4 }}
+
+          [Peer]
+          PublicKey = {{ awg_server_public_key }}
+          Endpoint = {{ ansible_host }}:{{ awg_port }}
+          AllowedIPs = 0.0.0.0/0, ::/0
+          PersistentKeepalive = 25
+      loop: "{{ clients_list }}"
+      loop_control:
+        extended: true
+        label: "{{ item.name }}"
+      vars:
+        client_ip: "{{ awg_subnet | ansible.utils.nthhost(ansible_loop.index + 1) }}"
+
+    - name: Allow SSH port through UFW firewall
+      ansible.builtin.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Allow AmneziaWG UDP port through UFW firewall
+      ansible.builtin.ufw:
+        rule: allow
+        port: "{{ awg_port | string }}"
+        proto: udp
+
+    - name: Enable UFW firewall
+      ansible.builtin.ufw:
+        state: enabled
+
+    - name: Ensure AmneziaWG service is enabled and started
+      ansible.builtin.systemd:
+        name: awg-quick@awg0
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart AmneziaWG Service
+      ansible.builtin.service:
+        name: awg-quick@awg0
+        state: restarted

@@ -3,13 +3,25 @@ root_password: "old-pass"
 new_user: "new-login"
 new_user_password: "new-pass"
 xray_port: 443
-xray_sni: "dl.google.com"
-xray_dest: "dl.google.com:443"
+spoof_sni: "dl.google.com"
 xray_private_key: "private-key"
-xray_public_key: "public-key"
 xray_short_id: "1a2b3c4d"
-xray_clients:
+clients_list:
   - name: "client1"
     uuid: "uuid1"
+    awg_private_key: "2C10sH1v...YOUR_CLIENT_KEY..."
   - name: "client2"
     uuid: "uuid2"
+    awg_private_key: "0C81mP9L...YOUR_CLIENT_KEY..."
+awg_subnet: "10.8.0.0/24"
+awg_port: 51820
+awg_jc: 4
+awg_jmin: 40
+awg_jmax: 70
+awg_s1: 15
+awg_s2: 110
+awg_h1: 10123456
+awg_h2: 20123456
+awg_h3: 30123456
+awg_h4: 40123456
+awg_server_private_key: "oAi/M03p...YOUR_SERVER_KEY..."
