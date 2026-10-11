@@ -82,7 +82,7 @@
     - name: Derive Xray public key from private key on the server
       ansible.builtin.shell: |
         set -o pipefail
-        xray x25519 -i "{{ xray_private_key }}" | grep "Public key:" | awk '{print $3}'
+        xray x25519 -i "{{ xray_private_key }}" | grep "Password (PublicKey):" | awk '{print $3}'
       args:
         executable: /bin/bash
       register: xray_derived_pubkey
