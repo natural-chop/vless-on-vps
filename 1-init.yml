@@ -59,3 +59,9 @@
         msg: "Rebooting server after initial system upgrades"
         reboot_timeout: 60
       when: reboot_flag.stat.exists
+
+  handlers:
+    - name: Restart Journald Service
+      ansible.builtin.service:
+        name: systemd-journald
+        state: restarted
