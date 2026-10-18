@@ -11,6 +11,24 @@
     awg_server_ip: "{{ awg_subnet | ansible.utils.nthhost(1) }}"
 
   tasks:
+    - name: Stop and disable Xray service
+      ansible.builtin.systemd:
+        name: xray
+        state: stopped
+        enabled: false
+        daemon_reload: true
+      ignore_errors: true
+
+    - name: Ensure repository prerequisites are installed
+      apt:
+        name:
+          - software-properties-common
+          - python3-launchpadlib
+          - dirmngr
+          - gnupg
+        state: present
+        update_cache: yes
+    
     - name: Install UFW and dependencies
       ansible.builtin.apt:
         name:
@@ -20,21 +38,22 @@
         state: present
         update_cache: yes
 
-    - name: Add AmneziaWG PPA repository
+    - name: Add AmneziaWG PPA using shorthand
       ansible.builtin.apt_repository:
-        repo: ppa:amnezia/ppa
+        repo: 'ppa:amnezia/ppa'
         state: present
+        update_cache: yes
 
     - name: Install AmneziaWG tools and kernel module (DKMS)
       ansible.builtin.apt:
         name:
+          - "linux-headers-{{ ansible_kernel }}"
           - amneziawg
-          - amneziawg-tools
         state: present
         update_cache: yes
 
     - name: Enable IPv4 packet forwarding in sysctl
-      ansible-posix.sysctl:
+      ansible.posix.sysctl:
         name: net.ipv4.ip_forward
         value: '1'
         sysctl_set: true

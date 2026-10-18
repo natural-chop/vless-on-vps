@@ -10,6 +10,13 @@
     ansible_become_password: "{{ new_user_password }}"
 
   tasks:
+    - name: Stop and disable AmneziaWG interface
+      ansible.builtin.systemd:
+        name: "wg-quick@{{ awg_interface | default('awg0') }}"
+        state: stopped
+        enabled: false
+      ignore_errors: true
+  
     - name: Install UFW firewall
       ansible.builtin.apt:
         name: ufw
