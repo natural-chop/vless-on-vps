@@ -93,7 +93,7 @@
 
     - name: Output client connection strings
       ansible.builtin.debug:
-        msg: "vless://{{ item.uuid }}@{{ ansible_host }}:{{ xray_port }}?type=xhttp&security=reality&pbk={{ xray_derived_pubkey.stdout | trim }}&fp=chrome&sni={{ spoof_sni }}&sid={{ xray_short_id }}&path=%2Fapi%2Fv1%2sstream#{{ item.name }}"
+        msg: "vless://{{ item.uuid }}@{{ ansible_host }}:{{ xray_port }}?type=xhttp&security=reality&pbk={{ xray_derived_pubkey.stdout | trim }}&fp=chrome&sni={{ spoof_sni }}&sid={{ xray_short_id }}&path=%2Fapi%2Fv1%2Fstream#{{ item.name }}"
       loop: "{{ clients_list }}"
       loop_control:
         label: "{{ item.name }}"
