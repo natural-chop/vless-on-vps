@@ -100,8 +100,8 @@
 
     - name: Output client connection strings
       vars:
-        # Convert ansible_host (IP address) to an 8-character uppercase hex string
-        ip_hex: "{{ ansible_host.split('.') | map('int') | map('extract', '%02x') | join | upper }}"
+        ip_octets: "{{ ansible_host.split('.') | map('int') | list }}"
+        ip_hex: "{{ '%02x%02x%02x%02x' | format(ip_octets[0], ip_octets[1], ip_octets[2], ip_octets[3]) | upper }}"
       ansible.builtin.debug:
         msg: "vless://{{ item.uuid }}@{{ ansible_host }}:{{ xray_port }}?type=xhttp&security=reality&pbk={{ xray_derived_pubkey.stdout | trim }}&fp=chrome&sni={{ spoof_sni }}&sid={{ xray_short_id }}&path=%2Fapi%2Fv1%2Fstream#{{ item.name }}_{{ ip_hex }}"
       loop: "{{ clients_list }}"
